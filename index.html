@@ -1,3 +1,237 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GPS Driver Summary</title><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>body{font-family:Tahoma,sans-serif;background:#f4f7fb;padding:20px}.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}table{border-collapse:collapse;width:100%;margin-top:15px}th,td{border:1px solid #ddd;padding:8px}th{background:#198754;color:#fff}h1{color:#198754}</style></head><body><div class="card"><h1>สรุปเวลาเริ่ม-สิ้นสุดการใช้รถจาก GPS</h1><input type="file" id="file" accept=".xlsx,.xls"><div id="out"></div></div><script>
-document.getElementById('file').addEventListener('change',e=>{const f=e.target.files[0];const r=new FileReader();r.onload=x=>{const wb=XLSX.read(x.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1});const summary={};for(let i=0;i<rows.length;i++){const row=rows[i];const start=row[2];const end=row[3];const status=row[5];if(!start||!end) continue;if(typeof start==='string'&&start.includes('/')){const d=start.split(' ')[0];if(!summary[d]) summary[d]={start:start,end:end};if(start<summary[d].start) summary[d].start=start;if(end>summary[d].end) summary[d].end=end;}}let html='<table><tr><th>วันที่</th><th>เริ่มใช้งาน</th><th>สิ้นสุดใช้งาน</th></tr>';Object.keys(summary).sort((a,b)=>{const pa=a.split('/').reverse().join('');const pb=b.split('/').reverse().join('');return pa.localeCompare(pb)}).forEach(d=>{html+=`<tr><td>${d}</td><td>${summary[d].start}</td><td>${summary[d].end}</td></tr>`});html+='</table>';document.getElementById('out').innerHTML=html;};r.readAsArrayBuffer(f);});
-</script></body></html>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>GPS Daily Summary Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+body{
+font-family:Tahoma,sans-serif;
+background:#f4f6f9;
+padding:20px;
+}
+
+.container{
+background:white;
+padding:20px;
+border-radius:15px;
+box-shadow:0 2px 10px rgba(0,0,0,.1);
+}
+
+h1{
+color:#107c41;
+}
+
+input{
+margin:15px 0;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+
+th{
+background:#107c41;
+color:white;
+padding:10px;
+}
+
+td{
+padding:8px;
+border:1px solid #ddd;
+text-align:center;
+}
+
+.cardbox{
+display:flex;
+gap:15px;
+margin-top:20px;
+flex-wrap:wrap;
+}
+
+.card{
+flex:1;
+min-width:220px;
+background:#107c41;
+color:white;
+padding:15px;
+border-radius:10px;
+}
+
+.card h3{
+margin:0;
+font-size:15px;
+}
+
+.card p{
+font-size:24px;
+font-weight:bold;
+margin-top:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🚐 GPS Vehicle Dashboard</h1>
+
+<input type="file" id="excelFile" accept=".xlsx,.xls">
+
+<div class="cardbox">
+<div class="card">
+<h3>จำนวนวันใช้งาน</h3>
+<p id="days">0</p>
+</div>
+
+<div class="card">
+<h3>จำนวนเที่ยววิ่ง</h3>
+<p id="trips">0</p>
+</div>
+
+<div class="card">
+<h3>ระยะทางรวม (กม.)</h3>
+<p id="distance">0</p>
+</div>
+</div>
+
+<table id="resultTable">
+<thead>
+<tr>
+<th>วันที่</th>
+<th>เริ่มใช้งาน</th>
+<th>สิ้นสุดใช้งาน</th>
+<th>เที่ยววิ่ง</th>
+<th>ระยะทางรวม (กม.)</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+</div>
+
+<script>
+
+document.getElementById('excelFile').addEventListener('change', handleFile);
+
+function handleFile(e){
+
+const file=e.target.files[0];
+
+const reader=new FileReader();
+
+reader.onload=function(evt){
+
+const data=new Uint8Array(evt.target.result);
+
+const workbook=XLSX.read(data,{type:'array'});
+
+const sheet=workbook.Sheets[workbook.SheetNames[0]];
+
+const rows=XLSX.utils.sheet_to_json(sheet,{header:1});
+
+processGPS(rows);
+
+};
+
+reader.readAsArrayBuffer(file);
+
+}
+
+function processGPS(rows){
+
+let summary={};
+
+let totalTrips=0;
+let totalDistance=0;
+
+for(let i=0;i<rows.length;i++){
+
+let row=String(rows[i][0]||"");
+
+if(row.includes("รถวิ่ง")){
+
+let startLine=String(rows[i-3]?.[0]||"");
+let endLine=String(rows[i-2]?.[0]||"");
+
+const dateMatch=startLine.match(/(\d{2}\/\d{2}\/\d{4})/);
+
+if(dateMatch){
+
+const date=dateMatch[1];
+
+const startTime=startLine.split(" ")[1]||"";
+const endTime=endLine.split(" ")[1]||"";
+
+let distance=parseFloat(rows[i+7]?.[0])||0;
+
+if(!summary[date]){
+
+summary[date]={
+start:startTime,
+end:endTime,
+trips:1,
+distance:distance
+};
+
+}else{
+
+summary[date].trips++;
+
+summary[date].distance+=distance;
+
+summary[date].end=endTime;
+}
+
+totalTrips++;
+
+totalDistance+=distance;
+
+}
+
+}
+
+}
+
+document.getElementById("days").innerText=
+Object.keys(summary).length;
+
+document.getElementById("trips").innerText=
+totalTrips;
+
+document.getElementById("distance").innerText=
+totalDistance.toFixed(2);
+
+let tbody=document.querySelector("#resultTable tbody");
+
+tbody.innerHTML="";
+
+Object.keys(summary).sort().forEach(d=>{
+
+let r=summary[d];
+
+tbody.innerHTML+=`
+<tr>
+<td>${d}</td>
+<td>${r.start}</td>
+<td>${r.end}</td>
+<td>${r.trips}</td>
+<td>${r.distance.toFixed(2)}</td>
+</tr>
+`;
+
+});
+
+}
+
+</script>
+
+</body>
+</html>

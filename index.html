@@ -1,105 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>GPS Vehicle Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'Segoe UI',Tahoma,sans-serif;
+    background:#f4f6f9;
+    margin:0;
+    padding:20px;
+}
+
+.container{
+    width:100%;
+    max-width:1600px;
+    margin:auto;
+    background:#fff;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0 2px 10px rgba(0,0,0,.1);
+}
+
+h1{
+    color:#107c41;
+    margin-bottom:20px;
+}
+
+input[type=file]{
+    margin-bottom:20px;
+}
+
+.cards{
+    display:flex;
+    gap:15px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+}
+
+.card{
+    flex:1;
+    min-width:250px;
+    background:#107c41;
+    color:#fff;
+    border-radius:10px;
+    padding:20px;
+}
+
+.card h3{
+    margin:0;
+    font-size:18px;
+}
+
+.card p{
+    margin-top:15px;
+    font-size:32px;
+    font-weight:bold;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#107c41;
+    color:white;
+    padding:12px;
+}
+
+td{
+    border:1px solid #ddd;
+    padding:10px;
+    text-align:center;
+}
+
+tr:nth-child(even){
+    background:#f9f9f9;
+}
+
+.status{
+    margin-top:10px;
+    color:#666;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🚐 GPS Vehicle Dashboard</h1>
+
+<input type="file" id="excelFile" accept=".xlsx,.xls">
+
+<div class="status" id="status">
+เลือกไฟล์ Excel...
+</div>
+
+<div class="cards">
+
+<div class="card">
+<h3>จำนวนวันใช้งาน</h3>
+<p id="days">0</p>
+</div>
+
+<div class="card">
+<h3>จำนวนเที่ยววิ่ง</h3>
+<p id="trips">0</p>
+</div>
+
+<div class="card">
+<h3>ระยะทางรวม (กม.)</h3>
+<p id="distance">0</p>
+</div>
+
+</div>
+
+<table id="resultTable">
+
+<thead>
+<tr>
+<th>วันที่</th>
+<th>เริ่มใช้งาน</th>
+<th>สิ้นสุดใช้งาน</th>
+<th>เที่ยววิ่ง</th>
+<th>ระยะทางรวม (กม.)</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+</div>
+
 <script>
 
-document.getElementById("excelFile").addEventListener("change", function(e){
+document.getElementById('excelFile').addEventListener('change', handleFile);
+
+function handleFile(e){
 
 const file = e.target.files[0];
+
+if(!file) return;
+
+document.getElementById('status').innerHTML =
+'กำลังอ่านไฟล์ : ' + file.name;
 
 const reader = new FileReader();
 
 reader.onload = function(event){
 
+try{
+
 const data = new Uint8Array(event.target.result);
 
-const workbook = XLSX.read(data,{type:"array"});
+const workbook = XLSX.read(data,{type:'array'});
 
-const sheet = workbook.Sheets[workbook.SheetNames[0]];
+const sheetName = workbook.SheetNames[0];
+
+const sheet = workbook.Sheets[sheetName];
 
 const rows = XLSX.utils.sheet_to_json(sheet);
 
-calculate(rows);
+console.log(rows);
+
+processData(rows);
+
+}catch(err){
+
+console.error(err);
+
+document.getElementById('status').innerHTML =
+'❌ อ่านไฟล์ไม่สำเร็จ : ' + err.message;
+
+}
 
 };
 
 reader.readAsArrayBuffer(file);
 
-});
+}
 
-function calculate(rows){
+function processData(rows){
 
-const daily={};
+const summary = {};
 
-let totalDistance=0;
-let totalTrips=0;
+let totalTrips = 0;
+let totalDistance = 0;
 
-rows.forEach(r=>{
+rows.forEach(row=>{
 
-const status=(r["สถานะ"]||"").toString();
+const status =
+String(
+row["สถานะ"] ||
+row["Status"] ||
+""
+).trim();
 
-if(!status.includes("รถวิ่ง")) return;
+if(status !== "รถวิ่ง"){
+return;
+}
 
-const date=r["วันที่"];
+const date =
+row["วันที่"] ||
+row["Date"] ||
+"";
 
-const start=r["เวลาเริ่มต้น"];
-const end=r["เวลาสิ้นสุด"];
+const start =
+row["เวลาเริ่มต้น"] ||
+row["เวลาเริ่ม"] ||
+row["Start Time"] ||
+"";
 
-const distance=parseFloat(r["ระยะทางรวม"] || r["ระยะทางรวม (กม.)"] || 0);
+const end =
+row["เวลาสิ้นสุด"] ||
+row["สิ้นสุด"] ||
+row["End Time"] ||
+"";
 
-if(!daily[date]){
+const distance =
+parseFloat(
+row["ระยะทางรวม (กม.)"] ||
+row["ระยะทางรวม"] ||
+row["Distance"] ||
+0
+);
 
-daily[date]={
+if(!date){
+return;
+}
+
+if(!summary[date]){
+
+summary[date] = {
 start:start,
 end:end,
-distance:0,
-trips:0
+trips:0,
+distance:0
 };
 
 }
 
-daily[date].trips++;
-daily[date].distance+=distance;
+summary[date].trips++;
+summary[date].distance += distance;
+
+if(start < summary[date].start){
+summary[date].start = start;
+}
+
+if(end > summary[date].end){
+summary[date].end = end;
+}
 
 totalTrips++;
-
-totalDistance+=distance;
-
-if(start < daily[date].start)
-daily[date].start=start;
-
-if(end > daily[date].end)
-daily[date].end=end;
+totalDistance += distance;
 
 });
 
-document.getElementById("days").innerText=
-Object.keys(daily).length;
+document.getElementById("days").innerText =
+Object.keys(summary).length;
 
-document.getElementById("trips").innerText=
+document.getElementById("trips").innerText =
 totalTrips;
 
-document.getElementById("distance").innerText=
+document.getElementById("distance").innerText =
 totalDistance.toFixed(2);
 
-const tbody=
+const tbody =
 document.querySelector("#resultTable tbody");
 
-tbody.innerHTML="";
+tbody.innerHTML = "";
 
-Object.keys(daily).sort().forEach(date=>{
+Object.keys(summary).forEach(date=>{
 
-const d=daily[date];
+const data = summary[date];
 
-tbody.innerHTML+=`
-<tr>
+const tr = document.createElement("tr");
+
+tr.innerHTML = `
 <td>${date}</td>
-<td>${d.start}</td>
-<td>${d.end}</td>
-<td>${d.trips}</td>
-<td>${d.distance.toFixed(2)}</td>
-</tr>
+<td>${data.start}</td>
+<td>${data.end}</td>
+<td>${data.trips}</td>
+<td>${data.distance.toFixed(2)}</td>
 `;
 
+tbody.appendChild(tr);
+
 });
+
+document.getElementById('status').innerHTML =
+'✅ อ่านข้อมูลแล้ว จำนวน ' + rows.length + ' รายการ';
 
 }
 
 </script>
+
+</body>
+</html>
